@@ -183,31 +183,8 @@ async def userid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['state'] = FORWARD_WAIT
     await update.message.reply_text("Пожалуйста, перешлите сообщение от нужного пользователя для получения его ID")
 
-async def handle_forward(update: Update, context: CallbackContext):
-    # Проверяем, находится ли пользователь в состоянии ожидания
-    print(context.user_data.get('state'))
-    if context.user_data.get('state') == FORWARD_WAIT:
-        print(update.message.forward_origin)
-        orig: MessageOriginUser | None = update.message.forward_origin
-        # Проверяем, что сообщение пересланное
-        if orig:
-            # Получаем ID оригинального отправителя
-            user_id = orig.sender_user.id
-            username = orig.sender_user.username
 
-            # Формируем ответное сообщение
-            response = f"ID пользователя: {user_id}\n"
-            if username:
-                response += f"Имя пользователя: {username}"
-
-            # Отправляем ответ
-            await update.message.reply_text(response)
-            # Очищаем состояние
-            context.user_data.pop('state', None)
-        else:
-            await update.message.reply_text("Пожалуйста, перешлите именно сообщение от нужного пользователя")
-
-# Error handler
+# Handlers
 async def error(obj: object, context: CallbackContext):
     devs = [-1002472077168]
     print(obj)
@@ -244,8 +221,35 @@ async def error(obj: object, context: CallbackContext):
         await context.bot.send_message(dev_id, text, parse_mode=ParseMode.HTML)
     raise
 
+async def handle_forward(update: Update, context: CallbackContext):
+    # Проверяем, находится ли пользователь в состоянии ожидания
+    print(context.user_data.get('state'))
+    if context.user_data.get('state') == FORWARD_WAIT:
+        print(update.message.forward_origin)
+        orig: MessageOriginUser | None = update.message.forward_origin
+        # Проверяем, что сообщение пересланное
+        if orig:
+            # Получаем ID оригинального отправителя
+            user_id = orig.sender_user.id
+            username = orig.sender_user.username
+
+            # Формируем ответное сообщение
+            response = f"ID пользователя: {user_id}\n"
+            if username:
+                response += f"Имя пользователя: {username}"
+
+            # Отправляем ответ
+            await update.message.reply_text(response)
+            # Очищаем состояние
+            context.user_data.pop('state', None)
+        else:
+            await update.message.reply_text("Пожалуйста, перешлите именно сообщение от нужного пользователя")
+
+
+# Main bot
 app = ApplicationBuilder().token(token).build()
 
+# Command handlers
 add_handler("hack", hack)
 add_handler("start", start)
 add_handler("help", help)
@@ -256,6 +260,7 @@ add_handler("chatid", chatid)
 add_handler("debug", debug)
 add_handler("userid", userid)
 
+# Misc handlers
 app.add_handler(MessageHandler(filters.TEXT & filters.COMMAND, process_command))
 app.add_handler(MessageHandler(filters.FORWARDED, handle_forward))
 app.add_error_handler(error)
