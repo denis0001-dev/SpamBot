@@ -14,7 +14,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Messa
 from telegram.ext._utils.types import HandlerCallback, CCT, RT
 from telegram.helpers import mention_html
 
-from secrets import token
+from secrets import token, devIds
 from utils import generate_long_string, escape
 
 # Set up logging
@@ -42,11 +42,6 @@ def add_handler(command_name: str, function: CommandCallback):
     app.add_handler(CommandHandler(command_name, function))
     handlers[command_name] = function
 
-async def process_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    for i, cmd in enumerate(handlers):
-        if update.effective_message.text.lower().startswith(f"/{cmd.lower()}"):
-            await handlers[cmd](update, context)
-
 
 # Bot commands
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -72,6 +67,9 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 `/stop` \\- остановить атаку
 `/chatid` \\- получить ID текущего чата
 `/help` \\- помощь
+`/userid` \\- получить ID пользователя по пересланному сообщению
+`/me` \\- Имя бота
+`/creator` \\- Создатель бота
 """
     )
 
@@ -109,10 +107,10 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msgs = int(arguments[2])
         except IndexError: pass
     except IndexError:
-        await update.effective_message.reply_markdown_v2("*Please provide the Chat ID as an argument to this command\\.*")
+        await update.effective_message.reply_markdown_v2("*Пожалуйста, укажите ID чата как аргумент к этой команде\\.*")
         return
 
-    await update.effective_message.reply_markdown_v2("*_Starting attack\\.\\.\\._*")
+    await update.effective_message.reply_markdown_v2("*_Начинаю атаку\\.\\.\\._*")
 
     generate_messages(msgs)
     for message in messages:
@@ -137,7 +135,9 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
                     file.write(f"{sent_message.chat_id} {sent_message.message_id}\n")
                 except Forbidden:
-                    await update.effective_message.reply_markdown_v2("*I'm not in this group or channel, please add me to continue\\!*")
+                    await update.effective_message.reply_markdown_v2(
+                        "*Я не в этой группе или канале, пожалуйста, добавьте меня, чтобы продолжить\\!*"
+                    )
                     return
         # noinspection PyUnboundLocalVariable
         if exiting: sys.exit()
@@ -147,10 +147,11 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
         signal.signal(signal.SIGINT, signal.SIG_DFL)
         await asyncio.sleep(1)  # Задержка между сообщениями в 2 секунды
 
-    await update.effective_message.reply_markdown_v2("*_Attack complete\\!_*")
+    await update.effective_message.reply_markdown_v2("*_Атака завершена\\!_*")
 
 async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     deleted = 0
+    remaining = []
     with open("messages.txt", "r") as file:
         last_id = -1
         for msg in file.readlines():
@@ -161,16 +162,19 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     await update.get_bot().delete_message(chat_id=chat_id, message_id=message_id)
                     deleted += 1
                     last_id = message_id
-            except BadRequest: pass
+                else:
+                    remaining.append(msg)
+            except BadRequest:
+                remaining.append(msg)
+                pass
     with open("messages.txt", "w") as file:
-        file.write("")
-    await update.effective_message.reply_markdown_v2(f"*{deleted} messages were successfully deleted\\!*")
+        file.writelines(remaining)
+    await update.effective_message.reply_markdown_v2(f"*{deleted} сообщений было успешно удалено\\!*")
 
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     global should_stop
-    print("stopping!!!")
     should_stop = True
-    await update.effective_message.reply_markdown_v2(f"*Stopping\\!*")
+    await update.effective_message.reply_markdown_v2(f"*Останавливаюсь\\!*")
 
 async def chatid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.effective_message.reply_markdown_v2(f"{update.effective_message.chat_id}".replace("-", "\\-"))
@@ -183,10 +187,17 @@ async def userid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['state'] = FORWARD_WAIT
     await update.message.reply_text("Пожалуйста, перешлите сообщение от нужного пользователя для получения его ID")
 
+async def me(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_markdown_v2("Я @SPAM145226721BOT")
+
+async def creator(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_markdown_v2(
+        "Меня создал @denis0001\\_dev, программист, который знает большинство популярных языков программирования\\!"
+    )
+
 
 # Handlers
 async def error(obj: object, context: CallbackContext):
-    devs = [-1002472077168]
     print(obj)
 
     update: Optional[Update] = None
@@ -217,7 +228,7 @@ async def error(obj: object, context: CallbackContext):
     text = f"Ошибка <code>{sys.exc_info()[0].__name__}</code> случилась{''.join(payload)}. " \
            f"Полная трассировка:\n\n<code>{trace}</code>"
     print(text)
-    for dev_id in devs:
+    for dev_id in devIds:
         await context.bot.send_message(dev_id, text, parse_mode=ParseMode.HTML)
     raise
 
@@ -245,6 +256,11 @@ async def handle_forward(update: Update, context: CallbackContext):
         else:
             await update.message.reply_text("Пожалуйста, перешлите именно сообщение от нужного пользователя")
 
+async def process_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    for i, cmd in enumerate(handlers):
+        if update.effective_message.text.lower().startswith(f"/{cmd.lower()}"):
+            await handlers[cmd](update, context)
+
 
 # Main bot
 app = ApplicationBuilder().token(token).build()
@@ -259,6 +275,8 @@ add_handler("attack", attack)
 add_handler("chatid", chatid)
 add_handler("debug", debug)
 add_handler("userid", userid)
+add_handler("me", me)
+add_handler("creator", creator)
 
 # Misc handlers
 app.add_handler(MessageHandler(filters.TEXT & filters.COMMAND, process_command))
