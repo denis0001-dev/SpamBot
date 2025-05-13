@@ -201,6 +201,7 @@ async def error(obj: object, context: CallbackContext):
         payload.append(f' с id опроса {update.poll.id}.')
     text = f"Ошибка <code>{sys.exc_info()[0].__name__}</code> случилась{''.join(payload)}. " \
            f"Полная трассировка:\n\n<code>{trace}</code>"
+    print(text)
     for dev_id in devs:
         await context.bot.send_message(dev_id, text, parse_mode=ParseMode.HTML)
     raise
