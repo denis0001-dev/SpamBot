@@ -4,9 +4,9 @@ import logging
 import signal
 import sys
 import traceback
-
 from typing import Optional
-from telegram import Update
+
+from telegram import Update, MessageOriginUser
 from telegram.constants import ParseMode
 from telegram.error import BadRequest, Forbidden
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters, CallbackContext
@@ -15,7 +15,7 @@ from telegram.ext._utils.types import HandlerCallback, CCT, RT
 from telegram.helpers import mention_html
 
 from secrets import token
-from utils import generate_long_string
+from utils import generate_long_string, escape
 
 # Set up logging
 logging.basicConfig(
@@ -29,6 +29,7 @@ exiting = False
 should_stop = False
 CommandCallback = HandlerCallback[Update, CCT, RT]
 handlers: dict[str, CommandCallback] = {}
+FORWARD_WAIT = "forward_wait"
 
 
 # Utilities
@@ -105,7 +106,7 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         chat_id = arguments[1]
         try:
-            msgs = arguments[2]
+            msgs = int(arguments[2])
         except IndexError: pass
     except IndexError:
         await update.effective_message.reply_markdown_v2("*Please provide the Chat ID as an argument to this command\\.*")
@@ -127,9 +128,17 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"{message}512", parse_mode=ParseMode.MARKDOWN_V2
                 )
                 file.write(f"{sent_message.chat_id} {sent_message.message_id}\n")
-            except Forbidden:
-                await update.effective_message.reply_markdown_v2("*I'm not in this group or channel, please add me to continue\\!*")
-                return
+            except Forbidden as e:
+                print(e)
+                try:
+                    sent_message = await update.get_bot().send_message(
+                        chat_id=chat_id,
+                        text=f"{message}512", parse_mode=ParseMode.MARKDOWN_V2
+                    )
+                    file.write(f"{sent_message.chat_id} {sent_message.message_id}\n")
+                except Forbidden:
+                    await update.effective_message.reply_markdown_v2("*I'm not in this group or channel, please add me to continue\\!*")
+                    return
         # noinspection PyUnboundLocalVariable
         if exiting: sys.exit()
         if should_stop:
@@ -169,6 +178,35 @@ async def chatid(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def debug(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raise ZeroDivisionError()
 
+async def userid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Устанавливаем состояние ожидания пересланного сообщения
+    context.user_data['state'] = FORWARD_WAIT
+    await update.message.reply_text("Пожалуйста, перешлите сообщение от нужного пользователя для получения его ID")
+
+async def handle_forward(update: Update, context: CallbackContext):
+    # Проверяем, находится ли пользователь в состоянии ожидания
+    print(context.user_data.get('state'))
+    if context.user_data.get('state') == FORWARD_WAIT:
+        print(update.message.forward_origin)
+        orig: MessageOriginUser | None = update.message.forward_origin
+        # Проверяем, что сообщение пересланное
+        if orig:
+            # Получаем ID оригинального отправителя
+            user_id = orig.sender_user.id
+            username = orig.sender_user.username
+
+            # Формируем ответное сообщение
+            response = f"ID пользователя: {user_id}\n"
+            if username:
+                response += f"Имя пользователя: {username}"
+
+            # Отправляем ответ
+            await update.message.reply_text(response)
+            # Очищаем состояние
+            context.user_data.pop('state', None)
+        else:
+            await update.message.reply_text("Пожалуйста, перешлите именно сообщение от нужного пользователя")
+
 # Error handler
 async def error(obj: object, context: CallbackContext):
     devs = [-1002472077168]
@@ -187,7 +225,7 @@ async def error(obj: object, context: CallbackContext):
 
     print(sys.exc_info()[0].__name__)
 
-    trace = "".join(traceback.format_tb(sys.exc_info()[2]))
+    trace = escape("".join(traceback.format_tb(sys.exc_info()[2])))
     payload = []
 
     if update and update.effective_user:
@@ -216,8 +254,10 @@ add_handler("stop", stop)
 add_handler("attack", attack)
 add_handler("chatid", chatid)
 add_handler("debug", debug)
+add_handler("userid", userid)
 
 app.add_handler(MessageHandler(filters.TEXT & filters.COMMAND, process_command))
+app.add_handler(MessageHandler(filters.FORWARDED, handle_forward))
 app.add_error_handler(error)
 
 app.run_polling()
