@@ -10,6 +10,7 @@ from telegram.error import BadRequest, Forbidden
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 # noinspection PyProtectedMember
 from telegram.ext._utils.types import HandlerCallback, CCT, RT
+from secrets import token
 
 messages = []
 exiting = False
@@ -164,7 +165,7 @@ async def chatid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.effective_message.reply_markdown_v2(f"{update.effective_message.chat_id}".replace("-", "\\-"))
 
 # Основной код бота
-app = ApplicationBuilder().token("7679458537:AAFfZYDUDRmeZjniAIL7a1p8BNW-0xdzH4k").build()
+app = ApplicationBuilder().token(token).build()
 
 add_handler("hack", hack)
 add_handler("start", start)
