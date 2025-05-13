@@ -185,6 +185,8 @@ async def error(obj: object, context: CallbackContext):
             "Sorry, there was an error\\. Please try again or contact @denis0001\\_dev for support\\."
         )
 
+    print(sys.exc_info()[0].__name__)
+
     trace = "".join(traceback.format_tb(sys.exc_info()[2]))
     payload = []
 
@@ -197,7 +199,7 @@ async def error(obj: object, context: CallbackContext):
             payload.append(f' (@{update.effective_chat.username})')
     if update and update.poll:
         payload.append(f' с id опроса {update.poll.id}.')
-    text = f"Ошибка <code>{context.error}</code> случилась{''.join(payload)}. " \
+    text = f"Ошибка <code>{sys.exc_info()[0].__name__}</code> случилась{''.join(payload)}. " \
            f"Полная трассировка:\n\n<code>{trace}</code>"
     for dev_id in devs:
         await context.bot.send_message(dev_id, text, parse_mode=ParseMode.HTML)
