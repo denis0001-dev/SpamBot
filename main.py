@@ -1,6 +1,7 @@
 # Imports
 import asyncio
 import logging
+import re
 import signal
 import sys
 import traceback
@@ -150,6 +151,15 @@ async def attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.effective_message.reply_markdown_v2("*_Атака завершена\\!_*")
 
 async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    arguments = update.effective_message.text.split(" ")
+    all = False
+    msg_chat_id = update.effective_message.chat_id
+    if len(arguments) > 1:
+        if arguments[1].lower() == "all":
+            all = True
+        elif re.search(r"^-?\d+$", arguments[1]):
+            msg_chat_id = int(arguments[1])
+
     deleted = 0
     remaining = []
     with open("messages.txt", "r") as file:
@@ -157,14 +167,15 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         for msg in file.readlines():
             try:
                 chat_id = int(msg.split(" ")[0])
-                if chat_id == update.effective_message.chat_id:
+                if chat_id == msg_chat_id or all:
                     message_id = int(msg.split(" ")[1])
                     await update.get_bot().delete_message(chat_id=chat_id, message_id=message_id)
                     deleted += 1
                     last_id = message_id
                 else:
                     remaining.append(msg)
-            except BadRequest:
+            except BadRequest as e:
+                await update.effective_message.reply_markdown_v2(f"Ошибка при удалении сообщения: {e.message}")
                 remaining.append(msg)
                 pass
     with open("messages.txt", "w") as file:

@@ -5,6 +5,7 @@
       <option name="ignoredNames">
         <list>
           <option value="help" />
+          <option value="all" />
         </list>
       </option>
     </inspection_tool>
